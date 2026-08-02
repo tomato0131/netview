@@ -1,5 +1,5 @@
 [Unit]
-Description=NetviewOne Network Management Platform
+Description=NetviewOne Web Server (with API)
 After=network.target mariadb.service
 
 [Service]
