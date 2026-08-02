@@ -1,5 +1,5 @@
 declare global {
-  interface Window { __NETVIEW_API_BASE__?: string; }
+  interface Window { __NETVIEWONE_API_BASE__?: string; }
 }
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -35,7 +35,7 @@ const API_BASE = (() => {
   if (typeof window !== 'undefined') {
     const { protocol, hostname } = window.location;
     if (protocol === 'file:' || hostname === 'localhost' || hostname === '127.0.0.1') {
-      return window.__NETVIEW_API_BASE__ || 'http://localhost:80';
+      return window.__NETVIEWONE_API_BASE__ || 'http://localhost:80';
     }
   }
   return '';
@@ -68,16 +68,16 @@ function LoginPage({ onLogin, onRegister, onForgot, users }: { onLogin: (user: U
 
   const handleLogin = () => {
     if (!account.trim() || !password) { setError('请输入账号和密码'); return; }
-    console.log('[NetView] Login attempt:', { account: account.trim(), passwordLen: password.length, usersCount: users.length, users: users.map(u => ({ phone: u.phone, email: u.email, hasPassword: !!u.password, passwordMatch: u.password === password, status: u.status })) });
+    console.log('[NetviewOne] Login attempt:', { account: account.trim(), passwordLen: password.length, usersCount: users.length, users: users.map(u => ({ phone: u.phone, email: u.email, hasPassword: !!u.password, passwordMatch: u.password === password, status: u.status })) });
     const matched = users.find(u =>
       (u.phone === account.trim() || u.email === account.trim()) && u.password === password && u.status === 'active'
     );
     if (matched) {
-      console.log('[NetView] Login success:', matched.name);
+      console.log('[NetviewOne] Login success:', matched.name);
       setError('');
       onLogin(matched);
     } else {
-      console.log('[NetView] Login failed - no match found');
+      console.log('[NetviewOne] Login failed - no match found');
       setError('账号或密码错误，或账号已禁用');
     }
   };
@@ -86,7 +86,7 @@ function LoginPage({ onLogin, onRegister, onForgot, users }: { onLogin: (user: U
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-0 shadow-lg apple-card">
         <CardContent className="p-8 space-y-6">
-          <div className="text-center"><div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto"><EthernetPort className="h-7 w-7 text-primary-foreground" /></div><h1 className="text-2xl font-bold mt-4">NetView</h1><p className="text-sm text-muted-foreground mt-1">网络设备统一管理平台</p></div>
+          <div className="text-center"><div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto"><EthernetPort className="h-7 w-7 text-primary-foreground" /></div><h1 className="text-2xl font-bold mt-4">NetviewOne</h1><p className="text-sm text-muted-foreground mt-1">网络设备统一管理平台</p></div>
           <div className="space-y-4">
             <div><label className="text-sm font-medium">手机号 / 邮箱</label><Input className="mt-1.5 rounded-xl" placeholder="请输入手机号或邮箱" value={account} onChange={e => { setAccount(e.target.value); setError(''); }} onKeyDown={e => { if (e.key === 'Enter') handleLogin(); }} /></div>
             <div><label className="text-sm font-medium">密码</label><Input className="mt-1.5 rounded-xl" type="password" placeholder="请输入密码" value={password} onChange={e => { setPassword(e.target.value); setError(''); }} onKeyDown={e => { if (e.key === 'Enter') handleLogin(); }} /></div>
@@ -123,7 +123,7 @@ function RegisterPage({ onBack, onRegister }: { onBack: () => void; onRegister: 
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-0 shadow-lg apple-card">
         <CardContent className="p-8 space-y-5">
-          <div className="text-center"><div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto"><UserPlus className="h-7 w-7 text-primary-foreground" /></div><h1 className="text-xl font-bold mt-4">注册账号</h1><p className="text-sm text-muted-foreground mt-1">创建您的NetView管理账号</p></div>
+          <div className="text-center"><div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto"><UserPlus className="h-7 w-7 text-primary-foreground" /></div><h1 className="text-xl font-bold mt-4">注册账号</h1><p className="text-sm text-muted-foreground mt-1">创建您的NetviewOne管理账号</p></div>
           <div className="space-y-3">
             <div><label className="text-sm font-medium">姓名 <span className="text-red-400">*</span></label><Input className="mt-1.5 rounded-xl" placeholder="请输入姓名" value={form.name} onChange={e => set('name', e.target.value)} /></div>
             <div><label className="text-sm font-medium">部门 <span className="text-red-400">*</span></label><Input className="mt-1.5 rounded-xl" placeholder="请输入部门" value={form.department} onChange={e => set('department', e.target.value)} /></div>
@@ -226,7 +226,7 @@ function DashboardPage({ devices, onNavigateDevice, alertRecords, onNavigateAler
   const [editRemarkId, setEditRemarkId] = useState<string | null>(null);
   const [editRemarkValue, setEditRemarkValue] = useState('');
 
-  const apiBase = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'window.__NETVIEW_API_BASE__ || 'http://localhost:80'' : '';
+  const apiBase = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
 
   // ==================== DrawIO Import/Export ====================
   const DRAWIO_STYLE_MAP: Record<string, string> = {
@@ -261,8 +261,8 @@ function DashboardPage({ devices, onNavigateDevice, alertRecords, onNavigateAler
       cells += `          <mxGeometry relative="1" as="geometry" />\n`;
       cells += `        </mxCell>\n`;
     });
-    const xml = `<mxfile host="NetView" modified="2026-07-31T00:00:00.000Z" agent="NetView" version="1.0" type="device">
-  <diagram id="netview-topology" name="网络拓扑">
+    const xml = `<mxfile host="NetviewOne" modified="2026-07-31T00:00:00.000Z" agent="NetviewOne" version="1.0" type="device">
+  <diagram id="netviewone-topology" name="网络拓扑">
     <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
       <root>
         <mxCell id="0" />
@@ -274,7 +274,7 @@ ${cells}      </root>
     const blob = new Blob([xml], { type: 'application/xml' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'netview-topology.drawio'; a.click();
+    a.href = url; a.download = 'netviewone-topology.drawio'; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -980,7 +980,7 @@ function DevicesPage({ devices, onAddDevice, onEditDevice, onDeleteDevice, onNav
   devices: Device[]; onAddDevice: (d: Device) => void; onEditDevice: (d: Device) => void; onDeleteDevice: (id: string) => void; onNavigateDevice: (id: string) => void; onNavigateMonitorItems: (id: string) => void; groups: DeviceGroup[]; initialStatusFilter?: string;
 }) {
   const [probingIds, setProbingIds] = useState<Set<string>>(new Set());
-  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'window.__NETVIEW_API_BASE__ || 'http://localhost:80'' : '';
+  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
 
   const probePing = (device: Device) => {
     const key = `ping-${device.id}`;
@@ -1114,7 +1114,7 @@ function DevicesPage({ devices, onAddDevice, onEditDevice, onDeleteDevice, onNav
 // ==================== MONITOR ITEMS PAGE (Zabbix-style) ====================
 function MonitorItemsPage({ devices, deviceId, onBack, templates }: { devices: Device[]; deviceId: string; onBack: () => void; templates: OidTemplate[] }) {
   const device = devices.find(d => d.id === deviceId);
-  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'window.__NETVIEW_API_BASE__ || 'http://localhost:80'' : '';
+  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
   const [items, setItems] = useState<MonitorItem[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<MonitorItem | null>(null);
@@ -1447,7 +1447,7 @@ function MonitorItemsPage({ devices, deviceId, onBack, templates }: { devices: D
 
 // ==================== LATEST DATA PAGE ====================
 function LatestDataPage({ devices }: { devices: Device[] }) {
-  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'window.__NETVIEW_API_BASE__ || 'http://localhost:80'' : '';
+  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
   const [monitorItems, setMonitorItems] = useState<MonitorItem[]>([]);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -1537,7 +1537,7 @@ function DeviceDetailPage({ devices, deviceId, onBack, onSSH, templates }: { dev
   const [snmpData, setSnmpData] = useState<Record<string, string>>({});
   const [snmpLoading, setSnmpLoading] = useState(false);
   const [snmpError, setSnmpError] = useState('');
-  const API_BASE_LOCAL = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'window.__NETVIEW_API_BASE__ || 'http://localhost:80'' : '';
+  const API_BASE_LOCAL = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
 
   if (!device) return <div className="text-center py-20 text-muted-foreground">设备未找到</div>;
 
@@ -1748,7 +1748,7 @@ function SSHTerminalPage({ onBack, devices, onEditDevice, onDeleteDevice }: {
   const [credUsername, setCredUsername] = useState('');
   const [credPassword, setCredPassword] = useState('');
   const [command, setCommand] = useState('');
-  const [history, setHistory] = useState<Array<{ type: 'input' | 'output' | 'more'; text: string }>>([{ type: 'output', text: '欢迎使用 NetView SSH 终端。请在左侧选择设备并连接。' }]);
+  const [history, setHistory] = useState<Array<{ type: 'input' | 'output' | 'more'; text: string }>>([{ type: 'output', text: '欢迎使用 NetviewOne SSH 终端。请在左侧选择设备并连接。' }]);
   const [sshSearch, setSshSearch] = useState('');
 
   const termRef = useRef<HTMLDivElement>(null);
@@ -1846,7 +1846,7 @@ function SSHTerminalPage({ onBack, devices, onEditDevice, onDeleteDevice }: {
       setHistory([
         { type: 'output', text: `Connecting to ${device.ip}:${device.sshPort}...` },
         { type: 'output', text: `[连接失败] 无法连接到后端API服务 (${errMsg})` },
-        { type: 'output', text: '提示：请确认通过 window.__NETVIEW_API_BASE__ || 'http://localhost:80' 访问本页面，或检查后端服务是否运行。' },
+        { type: 'output', text: '提示：请确认后端服务是否运行。' },
       ]);
     }
     setConnecting(false);
@@ -2149,7 +2149,7 @@ function TemplatesPage({ templates, onAddTemplate, onDeleteTemplate }: { templat
 
 // ==================== MONITOR HOSTS PAGE ====================
 function MonitorHostsPage({ devices, templates }: { devices: Device[]; templates: OidTemplate[] }) {
-  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'window.__NETVIEW_API_BASE__ || 'http://localhost:80'' : '';
+  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
   const [search, setSearch] = useState('');
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [monitorItems, setMonitorItems] = useState<MonitorItem[]>([]);
@@ -2417,7 +2417,7 @@ function BigScreenPage({ devices, onExit }: { devices: Device[]; onExit: () => v
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col">
       <div className="flex items-center justify-between px-8 py-4 border-b border-border/50">
-        <div className="flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center"><EthernetPort className="h-5 w-5 text-primary-foreground" /></div><div><h1 className="text-xl font-bold tracking-tight">NetView 网络监控大屏</h1></div></div>
+        <div className="flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center"><EthernetPort className="h-5 w-5 text-primary-foreground" /></div><div><h1 className="text-xl font-bold tracking-tight">NetviewOne 网络监控大屏</h1></div></div>
         <div className="flex items-center gap-6"><p className="text-2xl font-bold tabular-nums tracking-wider">{formatTime(now)}</p><Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl" onClick={onExit}><Fullscreen className="h-5 w-5" /></Button></div>
       </div>
       <div className="flex-1 p-6 grid grid-cols-12 gap-5 overflow-auto">
@@ -3054,7 +3054,7 @@ export default function App() {
 
         setDataLoaded(true);
       } catch (e) {
-        console.error('[NetView] Failed to load data from API:', e);
+        console.error('[NetviewOne] Failed to load data from API:', e);
         setDataLoaded(true);
       }
     };
@@ -3175,7 +3175,7 @@ export default function App() {
   const monitorTickRef = useRef(0);
   const devicesRef = useRef(devices);
   devicesRef.current = devices;
-  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'window.__NETVIEW_API_BASE__ || 'http://localhost:80'' : '';
+  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
 
   useEffect(() => {
     if (page === 'login' || page === 'register' || page === 'forgot') return;
@@ -3271,7 +3271,7 @@ export default function App() {
       <aside className={`flex-shrink-0 flex flex-col bg-card border-r border-border transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-56'}`}>
           <div className="flex items-center gap-2.5 px-4 h-14 border-b border-border">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0"><EthernetPort className="h-4 w-4 text-primary-foreground" /></div>
-          {!sidebarCollapsed && <span className="font-bold text-sm tracking-tight">NetView</span>}
+          {!sidebarCollapsed && <span className="font-bold text-sm tracking-tight">NetviewOne</span>}
           {!sidebarCollapsed && currentUser && <span className="text-xs text-muted-foreground ml-1">· {currentUser.name}</span>}
         </div>
         <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">

@@ -9,7 +9,7 @@ AIGC:
   ReservedCode2: '6904e7a5-ac88-42ec-aade-1d0e94d6b9a1'
 ---
 
-# NetView - 网络设备统一管理平台
+# NetviewOne - 网络设备统一管理平台
 
 > 企业级网络设备监控与管理平台，集成 SNMP 采集、SSH 远程终端、拓扑编辑、告警推送等能力，支持 Ping/SNMP 双状态探活，开箱即用。
 
@@ -117,9 +117,9 @@ AIGC:
 ### 1. 准备数据库
 
 ```sql
-CREATE DATABASE netview CHARACTER SET utf8mb4;
-CREATE USER 'netview'@'localhost' IDENTIFIED BY 'your_password';
-GRANT ALL PRIVILEGES ON netview.* TO 'netview'@'localhost';
+CREATE DATABASE netviewone CHARACTER SET utf8mb4;
+CREATE USER 'netviewone'@'localhost' IDENTIFIED BY 'your_password';
+GRANT ALL PRIVILEGES ON netviewone.* TO 'netviewone'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
@@ -146,11 +146,11 @@ mkdir -p /data/net_view
 cp backend/serve_api.py /data/net_view/
 
 # 配置环境变量
-export NETVIEW_HOME=/data/net_view
-export NETVIEW_MYSQL_HOST=localhost
-export NETVIEW_MYSQL_USER=netview
-export NETVIEW_MYSQL_PASS=your_password
-export NETVIEW_MYSQL_DB=netview
+export NETVIEWONE_HOME=/data/net_view
+export NETVIEWONE_MYSQL_HOST=localhost
+export NETVIEWONE_MYSQL_USER=netviewone
+export NETVIEWONE_MYSQL_PASS=your_password
+export NETVIEWONE_MYSQL_DB=netviewone
 
 # 启动服务
 python /data/net_view/serve_api.py
@@ -160,15 +160,15 @@ python /data/net_view/serve_api.py
 
 ```bash
 # 复制 service 模板
-cp backend/netview.service /etc/systemd/system/netview.service
+cp backend/netviewone.service /etc/systemd/system/netviewone.service
 
 # 编辑密码等环境变量
-vi /etc/systemd/system/netview.service
+vi /etc/systemd/system/netviewone.service
 
 # 启用并启动
 systemctl daemon-reload
-systemctl enable netview
-systemctl start netview
+systemctl enable netviewone
+systemctl start netviewone
 ```
 
 ### 5. 构建并部署前端
@@ -231,7 +231,7 @@ cp dist/bundle.html /data/net_view/index.html
 ## 📂 项目结构
 
 ```
-netview/
+netviewone/
 ├── src/
 │   ├── App.tsx                  # 主应用（所有页面组件）
 │   ├── lib/
@@ -239,7 +239,7 @@ netview/
 │   └── components/ui/           # shadcn/ui 组件
 ├── backend/
 │   ├── serve_api.py             # Python 后端服务器
-│   └── netview.service          # systemd 服务模板
+│   └── netviewone.service          # systemd 服务模板
 ├── index.html                   # Vite 入口
 ├── vite.config.ts               # Vite 配置
 ├── tailwind.config.js           # Tailwind 配置
@@ -273,7 +273,7 @@ CREATE TABLE settings (k VARCHAR(128) PRIMARY KEY, v TEXT NOT NULL);
 前端在本地开发（`file://` 或 `localhost`）时自动连接后端 API，可通过全局变量覆盖：
 
 ```html
-<script>window.__NETVIEW_API_BASE__ = 'http://your-server:80';</script>
+<script>window.__NETVIEWONE_API_BASE__ = 'http://your-server:80';</script>
 ```
 
 ### SNMP Community

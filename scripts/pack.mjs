@@ -23,7 +23,7 @@ const bundleHtml = `<!doctype html>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%233b82f6'/%3E%3Cpath d='M5 22h4V14H5v8zm6 0h4V8h-4v14zm6 0h4V12h-4v10zm6 0h4V6h-4v16z' fill='white'/%3E%3C/svg%3E" />
-    <title>NetView — 网络设备统一管理平台</title>
+    <title>NetviewOne — 网络设备统一管理平台</title>
     <style>${cssCode}</style>
     <script>
     // Load ESM module via Blob URL to avoid CORS issues with file:// protocol

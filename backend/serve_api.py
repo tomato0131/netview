@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-NetView Web Server with MySQL + REST CRUD API
+NetviewOne Web Server with MySQL + REST CRUD API
 - Serves static files from /data/net_view/
 - MySQL persistence for devices, users, alert_rules, alert_records, settings
 - POST /api/ping     - execute ping command
@@ -42,7 +42,7 @@ else:
     from BaseHTTPServer import HTTPServer
     from urlparse import urlparse, parse_qs
 
-os.chdir(os.environ.get('NETVIEW_HOME', '/data/net_view'))
+os.chdir(os.environ.get('NETVIEWONE_HOME', '/data/net_view'))
 
 # Security: whitelist allowed characters
 SAFE_HOST_RE = re.compile(r'^[a-zA-Z0-9._-]+$')
@@ -50,10 +50,10 @@ SAFE_USER_RE = re.compile(r'^[a-zA-Z0-9._-]+$')
 
 # ==================== MySQL Setup ====================
 MYSQL_CONFIG = {
-    'host': os.environ.get('NETVIEW_MYSQL_HOST', 'localhost'),
-    'user': os.environ.get('NETVIEW_MYSQL_USER', 'netview'),
-    'passwd': os.environ.get('NETVIEW_MYSQL_PASS', 'changeme'),
-    'db': os.environ.get('NETVIEW_MYSQL_DB', 'netview'),
+    'host': os.environ.get('NETVIEWONE_MYSQL_HOST', 'localhost'),
+    'user': os.environ.get('NETVIEWONE_MYSQL_USER', 'netviewone'),
+    'passwd': os.environ.get('NETVIEWONE_MYSQL_PASS', 'changeme'),
+    'db': os.environ.get('NETVIEWONE_MYSQL_DB', 'netviewone'),
     'charset': 'utf8mb4',
 }
 
@@ -484,7 +484,7 @@ def check_sshpass():
 
 
 # ==================== HTTP Handler ====================
-class NetViewHandler(SimpleHTTPRequestHandler):
+class NetviewOneHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -1077,7 +1077,7 @@ def main():
     has_sshpass = check_sshpass()
     has_mysql = get_mysql() is not None
 
-    print('NetView server running on port {} (sshpass: {}, mysql: {})'.format(port, has_sshpass, has_mysql))
+    print('NetviewOne server running on port {} (sshpass: {}, mysql: {})'.format(port, has_sshpass, has_mysql))
 
     if not has_mysql:
         sys.stderr.write('WARNING: MySQL connection failed! Data will not be persisted.\n')
@@ -1088,7 +1088,7 @@ def main():
         print('Install with: yum install -y epel-release && yum install -y sshpass')
 
     try:
-        server = ReusableHTTPServer(('0.0.0.0', port), NetViewHandler)
+        server = ReusableHTTPServer(('0.0.0.0', port), NetviewOneHandler)
         server.serve_forever()
     except KeyboardInterrupt:
         print('\nShutting down...')

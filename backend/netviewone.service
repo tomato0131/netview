@@ -1,0 +1,18 @@
+[Unit]
+Description=NetviewOne Network Management Platform
+After=network.target mariadb.service
+
+[Service]
+Type=simple
+WorkingDirectory=/data/net_view
+ExecStart=/usr/bin/python /data/net_view/serve_api.py
+Restart=always
+RestartSec=5
+Environment=NETVIEWONE_HOME=/data/net_view
+Environment=NETVIEWONE_MYSQL_HOST=localhost
+Environment=NETVIEWONE_MYSQL_USER=netviewone
+Environment=NETVIEWONE_MYSQL_PASS=changeme
+Environment=NETVIEWONE_MYSQL_DB=netviewone
+
+[Install]
+WantedBy=multi-user.target
