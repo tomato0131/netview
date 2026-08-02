@@ -2963,7 +2963,7 @@ function DebugPage({ devices }: { devices: Device[] }) {
 
 // ==================== MAIN APP ====================
 export default function App() {
-  const [page, setPage] = useState<Page>('login');
+  const [page, setPage] = useState<Page>(() => (sessionStorage.getItem('netviewone_page') as Page) || 'login');
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [monitorDeviceId, setMonitorDeviceId] = useState<string | null>(null);
   const [deviceStatusFilter, setDeviceStatusFilter] = useState<string | null>(null);
@@ -2972,7 +2972,7 @@ export default function App() {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [devices, setDevices] = useState<Device[]>([]);
   const [users, setUsers] = useState<User[]>([DEFAULT_ADMIN]);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => { try { const s = sessionStorage.getItem('netviewone_user'); return s ? JSON.parse(s) : null; } catch { return null; } });
   const [groups] = useState<DeviceGroup[]>([]);
   const [logs] = useState<AuditLog[]>([]);
   const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
@@ -3247,7 +3247,7 @@ export default function App() {
   };
 
   // Auth pages
-  if (page === 'login') return <LoginPage onLogin={(user: User) => { setCurrentUser(user); setPage('dashboard'); }} onRegister={() => setPage('register')} onForgot={() => setPage('forgot')} users={users} />;
+  if (page === 'login' || !currentUser) return <LoginPage onLogin={(user: User) => { setCurrentUser(user); sessionStorage.setItem('netviewone_user', JSON.stringify(user)); setPage('dashboard'); sessionStorage.setItem('netviewone_page', 'dashboard'); }} onRegister={() => setPage('register')} onForgot={() => setPage('forgot')} users={users} />;
   if (page === 'register') return <RegisterPage onBack={() => setPage('login')} onRegister={(user: User) => { setUsers(prev => [...prev, user]); setCurrentUser(user); setPage('dashboard'); _apiPost('/api/users', user).catch(e => console.warn('API save user failed:', e)); }} />;
   if (page === 'forgot') return <ForgotPasswordPage onBack={() => setPage('login')} />;
 
@@ -3415,7 +3415,7 @@ export default function App() {
             )}
           </div>
 
-          <button onClick={() => { setPage('login'); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-all">
+          <button onClick={() => { setCurrentUser(null); sessionStorage.removeItem('netviewone_user'); sessionStorage.removeItem('netviewone_page'); setPage('login'); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-all">
             <LogOut className="h-4 w-4 flex-shrink-0" />
             {!sidebarCollapsed && <span>退出登录</span>}
           </button>
