@@ -35,7 +35,7 @@ const API_BASE = (() => {
   if (typeof window !== 'undefined') {
     const { protocol, hostname } = window.location;
     if (protocol === 'file:' || hostname === 'localhost' || hostname === '127.0.0.1') {
-      return window.__NETVIEWONE_API_BASE__ || 'http://localhost:80';
+      return window.__NETVIEWONE_API_BASE__ || 'http://localhost:8090';
     }
   }
   return '';
@@ -226,7 +226,7 @@ function DashboardPage({ devices, onNavigateDevice, alertRecords, onNavigateAler
   const [editRemarkId, setEditRemarkId] = useState<string | null>(null);
   const [editRemarkValue, setEditRemarkValue] = useState('');
 
-  const apiBase = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
+  const apiBase = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:8090') : '';
 
   // ==================== DrawIO Import/Export ====================
   const DRAWIO_STYLE_MAP: Record<string, string> = {
@@ -980,7 +980,7 @@ function DevicesPage({ devices, onAddDevice, onEditDevice, onDeleteDevice, onNav
   devices: Device[]; onAddDevice: (d: Device) => void; onEditDevice: (d: Device) => void; onDeleteDevice: (id: string) => void; onNavigateDevice: (id: string) => void; onNavigateMonitorItems: (id: string) => void; groups: DeviceGroup[]; initialStatusFilter?: string;
 }) {
   const [probingIds, setProbingIds] = useState<Set<string>>(new Set());
-  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
+  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:8090') : '';
 
   const probePing = (device: Device) => {
     const key = `ping-${device.id}`;
@@ -1114,7 +1114,7 @@ function DevicesPage({ devices, onAddDevice, onEditDevice, onDeleteDevice, onNav
 // ==================== MONITOR ITEMS PAGE (Zabbix-style) ====================
 function MonitorItemsPage({ devices, deviceId, onBack, templates }: { devices: Device[]; deviceId: string; onBack: () => void; templates: OidTemplate[] }) {
   const device = devices.find(d => d.id === deviceId);
-  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
+  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:8090') : '';
   const [items, setItems] = useState<MonitorItem[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<MonitorItem | null>(null);
@@ -1447,7 +1447,7 @@ function MonitorItemsPage({ devices, deviceId, onBack, templates }: { devices: D
 
 // ==================== LATEST DATA PAGE ====================
 function LatestDataPage({ devices }: { devices: Device[] }) {
-  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
+  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:8090') : '';
   const [monitorItems, setMonitorItems] = useState<MonitorItem[]>([]);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -1537,7 +1537,7 @@ function DeviceDetailPage({ devices, deviceId, onBack, onSSH, templates }: { dev
   const [snmpData, setSnmpData] = useState<Record<string, string>>({});
   const [snmpLoading, setSnmpLoading] = useState(false);
   const [snmpError, setSnmpError] = useState('');
-  const API_BASE_LOCAL = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
+  const API_BASE_LOCAL = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:8090') : '';
 
   if (!device) return <div className="text-center py-20 text-muted-foreground">设备未找到</div>;
 
@@ -2149,7 +2149,7 @@ function TemplatesPage({ templates, onAddTemplate, onDeleteTemplate }: { templat
 
 // ==================== MONITOR HOSTS PAGE ====================
 function MonitorHostsPage({ devices, templates }: { devices: Device[]; templates: OidTemplate[] }) {
-  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
+  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:8090') : '';
   const [search, setSearch] = useState('');
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [monitorItems, setMonitorItems] = useState<MonitorItem[]>([]);
@@ -3175,7 +3175,7 @@ export default function App() {
   const monitorTickRef = useRef(0);
   const devicesRef = useRef(devices);
   devicesRef.current = devices;
-  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:80') : '';
+  const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:8090') : '';
 
   useEffect(() => {
     if (page === 'login' || page === 'register' || page === 'forgot') return;

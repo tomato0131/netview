@@ -273,7 +273,7 @@ CREATE TABLE settings (k VARCHAR(128) PRIMARY KEY, v TEXT NOT NULL);
 前端在本地开发（`file://` 或 `localhost`）时自动连接后端 API，可通过全局变量覆盖：
 
 ```html
-<script>window.__NETVIEWONE_API_BASE__ = 'http://your-server:80';</script>
+<script>window.__NETVIEWONE_API_BASE__ = 'http://your-server:8090';</script>
 ```
 
 ### SNMP Community

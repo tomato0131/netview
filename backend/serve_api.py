@@ -1073,7 +1073,7 @@ class ReusableHTTPServer(HTTPServer):
 
 
 def main():
-    port = 80
+    port = 8090
     has_sshpass = check_sshpass()
     has_mysql = get_mysql() is not None
 
