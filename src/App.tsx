@@ -1878,8 +1878,21 @@ function SSHTerminalPage({ onBack, devices, onEditDevice, onDeleteDevice }: {
 
   const prompt = connectedDevice ? `<${connectedDevice.name}>` : '';
 
-  // Tab completion - H3C / Huawei / Cisco common commands
-  const tabCompletions: string[] = [
+  // H3C read-only command filter
+  const isH3CDevice = connectedDevice?.brand?.toUpperCase().includes('H3C') || connectedDevice?.brand?.toUpperCase().includes('华三');
+  const H3C_ALLOWED = /^(display\s|ping\s|tracert\s|quit|return)/i;
+  const H3C_DENIED_MSG = '⚠ 该H3C设备仅支持display查看命令，禁止执行配置变更操作。';
+
+  // Tab completion - context-aware based on device brand
+  const h3cCompletions: string[] = [
+    'display version', 'display cpu', 'display memory', 'display interface brief',
+    'display device', 'display clock', 'display current-configuration', 'display ip routing-table',
+    'display arp', 'display mac-address', 'display vlan', 'display interface',
+    'display diagnostic-information', 'display environment', 'display fan', 'display power',
+    'display logbuffer', 'display info-center', 'display startup', 'display irf',
+    'ping ', 'tracert ', 'quit', 'return',
+  ];
+  const otherCompletions: string[] = [
     'display version', 'display cpu', 'display memory', 'display interface brief',
     'display device', 'display clock', 'display current-configuration', 'display ip routing-table',
     'display arp', 'display mac-address', 'display vlan', 'display interface',
@@ -1890,6 +1903,7 @@ function SSHTerminalPage({ onBack, devices, onEditDevice, onDeleteDevice }: {
     'show mac address-table', 'show vlan', 'show interfaces',
     'enable', 'configure terminal', 'write memory',
   ];
+  const tabCompletions = isH3CDevice ? h3cCompletions : otherCompletions;
 
   const handleTabComplete = () => {
     if (!connectedDevice || !command.trim()) return;
@@ -1915,6 +1929,15 @@ function SSHTerminalPage({ onBack, devices, onEditDevice, onDeleteDevice }: {
   const handleCommand = async () => {
     if (!connectedDevice || !command.trim() || cmdExecuting || !sessionId) return;
     const input = command.trim();
+
+    // H3C read-only guard
+    if (isH3CDevice && !H3C_ALLOWED.test(input)) {
+      setHistory(prev => [...prev, { type: 'input', text: `${prompt}${input}` }, { type: 'output', text: H3C_DENIED_MSG }]);
+      setCommand('');
+      scrollBottom();
+      return;
+    }
+
     setCommand('');
     setCmdExecuting(true);
     try {
