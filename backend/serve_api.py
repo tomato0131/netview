@@ -36,10 +36,19 @@ PY3 = sys.version_info[0] >= 3
 
 if PY3:
     from http.server import SimpleHTTPRequestHandler, HTTPServer
+    try:
+        from http.server import ThreadingHTTPServer
+    except ImportError:
+        from socketserver import ThreadingMixIn
+        class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+            daemon_threads = True
     from urllib.parse import urlparse, parse_qs
 else:
     from SimpleHTTPServer import SimpleHTTPRequestHandler
     from BaseHTTPServer import HTTPServer
+    from SocketServer import ThreadingMixIn
+    class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+        daemon_threads = True
     from urlparse import urlparse, parse_qs
 
 os.chdir(os.environ.get('NETVIEWONE_HOME', '/data/net_view'))
@@ -1068,8 +1077,9 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
         SimpleHTTPRequestHandler.log_message(self, format, *args)
 
 
-class ReusableHTTPServer(HTTPServer):
+class ReusableHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = True
+    daemon_threads = True
 
 
 def main():
