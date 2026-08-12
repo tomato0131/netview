@@ -4,7 +4,7 @@ declare global {
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DEVICE_TYPES, FLOORS, ROOMS, DEFAULT_ADMIN, DEFAULT_H3C_TEMPLATE } from '@/lib/data';
-import type { Device, User, SnmpTrap, DeviceGroup, AuditLog, AlertRule, AlertRecord, TopoNode, TopoLink, MonitorItem, OidTemplate, OidCategory, OidItem } from '@/lib/data';
+import type { Device, User, SnmpTrap, DeviceGroup, AuditLog, AlertRule, AlertRecord, TopoNode, TopoLink, TopoType, MonitorItem, OidTemplate, OidCategory, OidItem } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -209,8 +209,8 @@ const TOPO_PALETTE = [
   { type: 'behavior-manager', label: '上网行为管理' },
 ];
 
-// ==================== DASHBOARD PAGE (Topology Editor) ====================
-function DashboardPage({ devices, onNavigateDevice, alertRecords, onNavigateAlerts, onNavigateDevices }: { devices: Device[]; onNavigateDevice: (id: string) => void; alertRecords: AlertRecord[]; onNavigateAlerts: () => void; onNavigateDevices: (statusFilter: string) => void }) {
+// ==================== TOPOLOGY EDITOR COMPONENT ====================
+function TopologyEditor({ topoType, title, devices, onNavigateDevice }: { topoType: TopoType; title: string; devices: Device[]; onNavigateDevice: (id: string) => void }) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [topoNodes, setTopoNodes] = useState<TopoNode[]>([]);
   const [topoLinks, setTopoLinks] = useState<TopoLink[]>([]);
@@ -261,8 +261,10 @@ function DashboardPage({ devices, onNavigateDevice, alertRecords, onNavigateAler
       cells += `          <mxGeometry relative="1" as="geometry" />\n`;
       cells += `        </mxCell>\n`;
     });
+    const diagramName = title;
+    const fileName = `netviewone-${topoType}-topology.drawio`;
     const xml = `<mxfile host="NetviewOne" modified="2026-07-31T00:00:00.000Z" agent="NetviewOne" version="1.0" type="device">
-  <diagram id="netviewone-topology" name="网络拓扑">
+  <diagram id="netviewone-${topoType}" name="${escapeXml(diagramName)}">
     <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
       <root>
         <mxCell id="0" />
@@ -274,7 +276,7 @@ ${cells}      </root>
     const blob = new Blob([xml], { type: 'application/xml' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'netviewone-topology.drawio'; a.click();
+    a.href = url; a.download = fileName; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -322,23 +324,24 @@ ${cells}      </root>
                 if (nameLower.includes(kw)) { type = t; break; }
               }
               const nodeId = id.startsWith('tn-') ? id : `tn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-              newNodes.push({ id: nodeId, type, name: nameLower, x: Math.round(x), y: Math.round(y) });
+              newNodes.push({ id: nodeId, type, name: nameLower, x: Math.round(x), y: Math.round(y), topoType });
               cellMap[id] = nodeId;
             } else if (edge === '1') {
               const source = cell.getAttribute('source') || '';
               const target = cell.getAttribute('target') || '';
               const linkId = id.startsWith('tl-') ? id : `tl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
               if (source && target) {
-                newLinks.push({ id: linkId, from: cellMap[source] || source, to: cellMap[target] || target, label: value || undefined });
+                newLinks.push({ id: linkId, from: cellMap[source] || source, to: cellMap[target] || target, label: value || undefined, topoType });
               }
             }
           });
-          // Replace all topology data
+          // Replace all topology data for this topoType
           setTopoNodes(newNodes);
           setTopoLinks(newLinks);
-          // Persist: delete all existing then save new
+          // Persist: delete existing items of this topoType only, then save new
           fetch(`${apiBase}/api/topology`).then(r => r.json()).then((items: any[]) => {
-            Promise.all(items.map((item: any) => fetch(`${apiBase}/api/topology/${item.id}`, { method: 'DELETE' }).catch(() => {}))).then(() => {
+            const toDelete = items.filter((item: any) => (item.topoType || 'backbone') === topoType);
+            Promise.all(toDelete.map((item: any) => fetch(`${apiBase}/api/topology/${item.id}`, { method: 'DELETE' }).catch(() => {}))).then(() => {
               newNodes.forEach(n => saveNode(n));
               newLinks.forEach(l => saveLink(l));
             });
@@ -352,38 +355,35 @@ ${cells}      </root>
     input.click();
   };
 
-  // Load topology from API
+  // Load topology from API (filter by topoType)
   useEffect(() => {
     fetch(`${apiBase}/api/topology`).then(r => r.json()).then((items: any[]) => {
       const nodes: TopoNode[] = [];
       const links: TopoLink[] = [];
       items.forEach(item => {
+        // Default to 'backbone' for legacy data without topoType
+        const itemTopoType = item.topoType || 'backbone';
+        if (itemTopoType !== topoType) return;
         if (item.nodeType === 'link') links.push(item as TopoLink);
         else nodes.push(item as TopoNode);
       });
       setTopoNodes(nodes);
       setTopoLinks(links);
     }).catch(() => {});
-  }, [apiBase]);
+  }, [apiBase, topoType]);
 
   // Save helpers
   const saveNode = (node: TopoNode) => {
-    fetch(`${apiBase}/api/topology`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(node) }).catch(() => {});
+    const data = { ...node, topoType };
+    fetch(`${apiBase}/api/topology`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).catch(() => {});
   };
   const saveLink = (link: TopoLink) => {
-    const data = { ...link, nodeType: 'link' };
+    const data = { ...link, nodeType: 'link', topoType };
     fetch(`${apiBase}/api/topology`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).catch(() => {});
   };
   const deleteNodeApi = (id: string) => {
     fetch(`${apiBase}/api/topology/${id}`, { method: 'DELETE' }).catch(() => {});
   };
-
-  // Stats - SNMP only counts devices with SNMP enabled
-  const pingUpCount = devices.filter(d => d.pingStatus === 'up').length;
-  const pingDownCount = devices.filter(d => d.pingStatus === 'down').length;
-  const snmpEnabledDevices = devices.filter(d => d.snmpEnabled);
-  const snmpUpCount = snmpEnabledDevices.filter(d => d.snmpStatus === 'up').length;
-  const snmpDownCount = snmpEnabledDevices.filter(d => d.snmpStatus === 'down').length;
 
   // Get device status by linkedDeviceId
   const getDeviceStatus = (node: TopoNode): { ping: 'up' | 'down'; snmp: 'up' | 'down' | 'disabled' } => {
@@ -394,10 +394,9 @@ ${cells}      </root>
   };
 
   // Drag: start
-  // Node mouseDown — skip if in linking mode to avoid interfering with click
   const onNodeMouseDown = (e: React.MouseEvent, nodeId: string) => {
     if (!editMode) return;
-    if (linkingFromRef.current) return; // Don't start dragging when linking
+    if (linkingFromRef.current) return;
     e.stopPropagation();
     const node = topoNodes.find(n => n.id === nodeId);
     if (!node) return;
@@ -434,7 +433,7 @@ ${cells}      </root>
     const x = 100 + Math.random() * 400;
     const y = 100 + Math.random() * 200;
     const label = TOPO_PALETTE.find(p => p.type === type)?.label || type;
-    const node: TopoNode = { id, type, name: label, x: Math.round(x), y: Math.round(y) };
+    const node: TopoNode = { id, type, name: label, x: Math.round(x), y: Math.round(y), topoType };
     setTopoNodes(prev => [...prev, node]);
     saveNode(node);
   };
@@ -445,7 +444,6 @@ ${cells}      </root>
     setTopoLinks(prev => {
       const removed = prev.filter(l => l.from !== nodeId && l.to !== nodeId);
       removed.forEach(l => saveLink(l));
-      // delete the removed links from API
       prev.filter(l => l.from === nodeId || l.to === nodeId).forEach(l => deleteNodeApi(l.id));
       return removed;
     });
@@ -465,10 +463,9 @@ ${cells}      </root>
   const completeLink = (nodeId: string) => {
     const fromId = linkingFromRef.current;
     if (!fromId || fromId === nodeId) { setLinkingFrom(null); linkingFromRef.current = null; return; }
-    // Check duplicate
     const exists = topoLinks.some(l => (l.from === fromId && l.to === nodeId) || (l.from === nodeId && l.to === fromId));
     if (exists) { setLinkingFrom(null); linkingFromRef.current = null; return; }
-    const link: TopoLink = { id: `tl-${Date.now()}`, from: fromId, to: nodeId };
+    const link: TopoLink = { id: `tl-${Date.now()}`, from: fromId, to: nodeId, topoType };
     setTopoLinks(prev => [...prev, link]);
     saveLink(link);
     setLinkingFrom(null);
@@ -580,6 +577,254 @@ ${cells}      </root>
   );
 
   return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2"><EthernetPort className="h-5 w-5 text-primary" /><h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+          {linkingFrom && <Badge variant="outline" className="text-xs text-primary border-primary/30 ml-2 animate-pulse">🔗 连线模式：点击目标节点完成连线 | 点击空白取消</Badge>}
+        </div>
+        <div className="flex items-center gap-2">
+          {editMode && (
+            <>
+              <Button variant="outline" size="sm" className="rounded-lg text-xs h-7" onClick={exportDrawIO}>
+                <FileDown className="h-3 w-3 mr-1" />导出DrawIO
+              </Button>
+              <Button variant="outline" size="sm" className="rounded-lg text-xs h-7" onClick={importDrawIO}>
+                <FileUp className="h-3 w-3 mr-1" />导入DrawIO
+              </Button>
+            </>
+          )}
+          <Button variant={editMode ? 'default' : 'outline'} size="sm" className="rounded-lg text-xs h-7" onClick={() => setEditMode(!editMode)}>
+            {editMode ? <><Check className="h-3 w-3 mr-1" />完成编辑</> : <><Pencil className="h-3 w-3 mr-1" />编辑拓扑</>}
+          </Button>
+        </div>
+      </div>
+
+      {/* Edit mode: palette */}
+      {editMode && (
+        <div className="flex flex-wrap gap-2">
+          {TOPO_PALETTE.map(p => {
+            const ic = TOPO_ICONS[p.type];
+            return (
+              <button key={p.type} onClick={() => addNode(p.type)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/60 transition-colors text-xs font-medium">
+                <span className={`${ic?.color || 'text-foreground'}`}>{ic?.icon || <Server className="h-4 w-4" />}</span>
+                {p.label}
+                <Plus className="h-3 w-3 text-muted-foreground" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Canvas */}
+      <Card className="border-0 shadow-sm overflow-hidden">
+        <CardContent className="p-0">
+          <div ref={canvasRef}
+            className={`topo-canvas-bg relative w-full bg-muted/20 select-none ${editMode ? 'cursor-crosshair' : 'cursor-default'}`}
+            style={{ height: Math.max(480, ...topoNodes.map(n => n.y + 100)), minHeight: 480 }}
+            onMouseMove={e => {
+              onCanvasMouseMove(e);
+              if (linkingFromRef.current) {
+                const rect = canvasRef.current?.getBoundingClientRect();
+                if (rect) setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+              }
+            }}
+            onMouseUp={onCanvasMouseUp}
+            onClick={onCanvasClick}
+          >
+            {/* Grid pattern */}
+            <div className="absolute inset-0 opacity-[0.04]" style={{
+              backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+              backgroundSize: '24px 24px'
+            }} />
+
+            {/* Links SVG */}
+            {renderLinks()}
+
+            {/* Nodes */}
+            {topoNodes.map(node => {
+              const ic = TOPO_ICONS[node.type];
+              const status = getDeviceStatus(node);
+              const isSelected = selectedNode === node.id;
+              const isLinkingTarget = linkingFrom === node.id;
+              const hasLinked = !!node.linkedDeviceId;
+              return (
+                <div key={node.id}
+                  className={`absolute flex flex-col items-center gap-1 transition-shadow ${linkingFrom ? 'cursor-pointer' : editMode ? 'cursor-grab' : 'cursor-pointer'} ${isSelected ? 'z-20' : 'z-10'}`}
+                  style={{ left: node.x, top: node.y, width: 80 }}
+                  onMouseDown={e => onNodeMouseDown(e, node.id)}
+                  onClick={() => onNodeClick(node.id)}
+                  onContextMenu={e => onNodeContextMenu(e, node.id)}
+                >
+                  {/* Icon box */}
+                  <div className={`relative flex items-center justify-center w-14 h-14 rounded-2xl border-2 transition-all
+                    ${ic?.bg || 'bg-muted/30'} ${isSelected ? 'border-primary shadow-lg shadow-primary/20' : 'border-transparent hover:border-border'}
+                    ${isLinkingTarget ? 'ring-2 ring-primary ring-offset-2' : ''}
+                    ${linkingFrom && !isLinkingTarget ? 'hover:border-primary hover:shadow-md hover:shadow-primary/20' : ''}
+                    ${!hasLinked && node.type !== 'internet' ? 'opacity-70' : ''}`}
+                  >
+                    <span className={ic?.color || 'text-foreground'}>{ic?.icon || <Server className="h-6 w-6" />}</span>
+                    {/* Status indicator */}
+                    {hasLinked && (
+                      <span className={`absolute -top-1 -right-1 flex h-3.5 w-3.5`}>
+                        {status.ping === 'up' && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-50 animate-ping" />}
+                        <span className={`relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-card ${status.ping === 'up' ? 'bg-emerald-400' : status.ping === 'down' ? 'bg-red-400' : 'bg-muted-foreground/40'}`} />
+                      </span>
+                    )}
+                    {!hasLinked && node.type !== 'internet' && (
+                      <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-muted-foreground/30 border-2 border-card" />
+                      </span>
+                    )}
+                  </div>
+                  {/* Name */}
+                  <span className="text-[11px] font-medium text-center leading-tight max-w-[80px] truncate"
+                    onDoubleClick={() => { if (editMode) { setEditRemarkId(node.id); setEditRemarkValue(node.name); } }}
+                    title={editMode ? '双击编辑备注' : node.name}
+                  >{node.name}</span>
+                  {/* Label (IP) */}
+                  {node.label && <span className="text-[10px] text-muted-foreground font-mono">{node.label}</span>}
+                </div>
+              );
+            })}
+
+            {/* Node context menu */}
+            {nodeMenu && editMode && (
+              <div className="absolute z-50 bg-popover border border-border rounded-xl shadow-lg py-1 min-w-[160px]"
+                style={{ left: nodeMenu.x + 10, top: nodeMenu.y + 10 }}
+                onClick={e => e.stopPropagation()}
+              >
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
+                  onClick={() => { const n = topoNodes.find(nn => nn.id === nodeMenu.nodeId); setEditRemarkId(nodeMenu.nodeId); setEditRemarkValue(n?.name || ''); setNodeMenu(null); }}>
+                  <Pencil className="h-3.5 w-3.5" />编辑备注
+                </button>
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
+                  onClick={() => { startLinking(nodeMenu.nodeId); setNodeMenu(null); }}>
+                  <Link2 className="h-3.5 w-3.5" />连线到...
+                </button>
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
+                  onClick={() => { setLinkDeviceOpen(nodeMenu.nodeId); setNodeMenu(null); }}>
+                  <Plug className="h-3.5 w-3.5" />关联设备管理
+                </button>
+                {topoNodes.find(n => n.id === nodeMenu.nodeId)?.linkedDeviceId && (
+                  <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
+                    onClick={() => { unlinkDevice(nodeMenu.nodeId); setNodeMenu(null); }}>
+                    <Unplug className="h-3.5 w-3.5" />取消关联
+                  </button>
+                )}
+                <Separator />
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                  onClick={() => deleteNode(nodeMenu.nodeId)}>
+                  <Trash2 className="h-3.5 w-3.5" />删除节点
+                </button>
+              </div>
+            )}
+
+            {/* Link device dialog */}
+            {linkDeviceOpen && (
+              <Dialog open onOpenChange={() => setLinkDeviceOpen(null)}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader><DialogTitle>关联设备管理</DialogTitle></DialogHeader>
+                  <div className="max-h-60 overflow-y-auto space-y-1">
+                    {devices.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">设备管理中暂无设备</p>}
+                    {devices.map(dev => (
+                      <button key={dev.id}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted/60 transition-colors text-sm"
+                        onClick={() => linkDevice(linkDeviceOpen, dev.id)}>
+                        <div className="flex items-center gap-2">
+                          <StatusDot status={dev.pingStatus} />
+                          <span className="font-medium">{dev.name}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground font-mono">{dev.ip}</span>
+                      </button>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+
+            {/* Edit remark dialog */}
+            {editRemarkId && (
+              <Dialog open onOpenChange={() => setEditRemarkId(null)}>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader><DialogTitle>编辑备注</DialogTitle></DialogHeader>
+                  <input
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-input text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    value={editRemarkValue}
+                    onChange={e => setEditRemarkValue(e.target.value)}
+                    placeholder="输入备注名称"
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        setTopoNodes(prev => prev.map(n => n.id === editRemarkId ? { ...n, name: editRemarkValue } : n));
+                        const node = topoNodes.find(n => n.id === editRemarkId);
+                        if (node) saveNode({ ...node, name: editRemarkValue });
+                        setEditRemarkId(null);
+                      }
+                      if (e.key === 'Escape') setEditRemarkId(null);
+                    }}
+                  />
+                  <div className="flex justify-end gap-2 mt-2">
+                    <button className="px-4 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors"
+                      onClick={() => setEditRemarkId(null)}>取消</button>
+                    <button className="px-4 py-1.5 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                      onClick={() => {
+                        setTopoNodes(prev => prev.map(n => n.id === editRemarkId ? { ...n, name: editRemarkValue } : n));
+                        const node = topoNodes.find(n => n.id === editRemarkId);
+                        if (node) saveNode({ ...node, name: editRemarkValue });
+                        setEditRemarkId(null);
+                      }}>保存</button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+
+            {/* Empty state */}
+            {topoNodes.length === 0 && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                <EthernetPort className="h-12 w-12 text-muted-foreground/20" />
+                <p className="text-sm text-muted-foreground">点击「编辑拓扑」添加设备节点</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Link list in edit mode */}
+      {editMode && topoLinks.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground font-medium">连线列表（点击删除）</p>
+          <div className="flex flex-wrap gap-2">
+            {topoLinks.map(link => {
+              const from = topoNodes.find(n => n.id === link.from);
+              const to = topoNodes.find(n => n.id === link.to);
+              return (
+                <button key={link.id} onClick={() => deleteLink(link.id)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/50 hover:bg-red-500/10 text-xs text-muted-foreground hover:text-red-400 transition-colors">
+                  <Link2 className="h-3 w-3" />
+                  {from?.name || '?'} → {to?.name || '?'}
+                  <X className="h-3 w-3" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== DASHBOARD PAGE ====================
+function DashboardPage({ devices, onNavigateDevice, alertRecords, onNavigateAlerts, onNavigateDevices }: { devices: Device[]; onNavigateDevice: (id: string) => void; alertRecords: AlertRecord[]; onNavigateAlerts: () => void; onNavigateDevices: (statusFilter: string) => void }) {
+
+  // Stats - SNMP only counts devices with SNMP enabled
+  const pingUpCount = devices.filter(d => d.pingStatus === 'up').length;
+  const pingDownCount = devices.filter(d => d.pingStatus === 'down').length;
+  const snmpEnabledDevices = devices.filter(d => d.snmpEnabled);
+  const snmpUpCount = snmpEnabledDevices.filter(d => d.snmpStatus === 'up').length;
+  const snmpDownCount = snmpEnabledDevices.filter(d => d.snmpStatus === 'down').length;
+
+  return (
     <div className="space-y-6 fade-in">
       {/* Stats bar */}
       <div className="grid grid-cols-5 gap-4">
@@ -683,241 +928,11 @@ ${cells}      </root>
         </Card>
       </div>
 
-      {/* Topology */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><EthernetPort className="h-5 w-5 text-primary" /><h2 className="text-lg font-semibold tracking-tight">网络拓扑</h2>
-            {linkingFrom && <Badge variant="outline" className="text-xs text-primary border-primary/30 ml-2 animate-pulse">🔗 连线模式：点击目标节点完成连线 | 点击空白取消</Badge>}
-          </div>
-          <div className="flex items-center gap-2">
-            {editMode && (
-              <>
-                <Button variant="outline" size="sm" className="rounded-lg text-xs h-7" onClick={exportDrawIO}>
-                  <FileDown className="h-3 w-3 mr-1" />导出DrawIO
-                </Button>
-                <Button variant="outline" size="sm" className="rounded-lg text-xs h-7" onClick={importDrawIO}>
-                  <FileUp className="h-3 w-3 mr-1" />导入DrawIO
-                </Button>
-              </>
-            )}
-            <Button variant={editMode ? 'default' : 'outline'} size="sm" className="rounded-lg text-xs h-7" onClick={() => setEditMode(!editMode)}>
-              {editMode ? <><Check className="h-3 w-3 mr-1" />完成编辑</> : <><Pencil className="h-3 w-3 mr-1" />编辑拓扑</>}
-            </Button>
-          </div>
-        </div>
+      {/* Backbone Network Topology */}
+      <TopologyEditor topoType="backbone" title="骨干网络拓扑" devices={devices} onNavigateDevice={onNavigateDevice} />
 
-        {/* Edit mode: palette */}
-        {editMode && (
-          <div className="flex flex-wrap gap-2">
-            {TOPO_PALETTE.map(p => {
-              const ic = TOPO_ICONS[p.type];
-              return (
-                <button key={p.type} onClick={() => addNode(p.type)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/60 transition-colors text-xs font-medium">
-                  <span className={`${ic?.color || 'text-foreground'}`}>{ic?.icon || <Server className="h-4 w-4" />}</span>
-                  {p.label}
-                  <Plus className="h-3 w-3 text-muted-foreground" />
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Canvas */}
-        <Card className="border-0 shadow-sm overflow-hidden">
-          <CardContent className="p-0">
-            <div ref={canvasRef}
-              className={`topo-canvas-bg relative w-full bg-muted/20 select-none ${editMode ? 'cursor-crosshair' : 'cursor-default'}`}
-              style={{ height: Math.max(480, ...topoNodes.map(n => n.y + 100)), minHeight: 480 }}
-              onMouseMove={e => {
-                onCanvasMouseMove(e);
-                if (linkingFromRef.current) {
-                  const rect = canvasRef.current?.getBoundingClientRect();
-                  if (rect) setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-                }
-              }}
-              onMouseUp={onCanvasMouseUp}
-              onClick={onCanvasClick}
-            >
-              {/* Grid pattern */}
-              <div className="absolute inset-0 opacity-[0.04]" style={{
-                backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
-                backgroundSize: '24px 24px'
-              }} />
-
-              {/* Links SVG */}
-              {renderLinks()}
-
-              {/* Nodes */}
-              {topoNodes.map(node => {
-                const ic = TOPO_ICONS[node.type];
-                const status = getDeviceStatus(node);
-                const isSelected = selectedNode === node.id;
-                const isLinkingTarget = linkingFrom === node.id;
-                const hasLinked = !!node.linkedDeviceId;
-                return (
-                  <div key={node.id}
-                    className={`absolute flex flex-col items-center gap-1 transition-shadow ${linkingFrom ? 'cursor-pointer' : editMode ? 'cursor-grab' : 'cursor-pointer'} ${isSelected ? 'z-20' : 'z-10'}`}
-                    style={{ left: node.x, top: node.y, width: 80 }}
-                    onMouseDown={e => onNodeMouseDown(e, node.id)}
-                    onClick={() => onNodeClick(node.id)}
-                    onContextMenu={e => onNodeContextMenu(e, node.id)}
-                  >
-                    {/* Icon box */}
-                    <div className={`relative flex items-center justify-center w-14 h-14 rounded-2xl border-2 transition-all
-                      ${ic?.bg || 'bg-muted/30'} ${isSelected ? 'border-primary shadow-lg shadow-primary/20' : 'border-transparent hover:border-border'}
-                      ${isLinkingTarget ? 'ring-2 ring-primary ring-offset-2' : ''}
-                      ${linkingFrom && !isLinkingTarget ? 'hover:border-primary hover:shadow-md hover:shadow-primary/20' : ''}
-                      ${!hasLinked && node.type !== 'internet' ? 'opacity-70' : ''}`}
-                    >
-                      <span className={ic?.color || 'text-foreground'}>{ic?.icon || <Server className="h-6 w-6" />}</span>
-                      {/* Status indicator */}
-                      {hasLinked && (
-                        <span className={`absolute -top-1 -right-1 flex h-3.5 w-3.5`}>
-                          {status.ping === 'up' && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-50 animate-ping" />}
-                          <span className={`relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-card ${status.ping === 'up' ? 'bg-emerald-400' : status.ping === 'down' ? 'bg-red-400' : 'bg-muted-foreground/40'}`} />
-                        </span>
-                      )}
-                      {!hasLinked && node.type !== 'internet' && (
-                        <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                          <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-muted-foreground/30 border-2 border-card" />
-                        </span>
-                      )}
-                    </div>
-                    {/* Name */}
-                    <span className="text-[11px] font-medium text-center leading-tight max-w-[80px] truncate"
-                      onDoubleClick={() => { if (editMode) { setEditRemarkId(node.id); setEditRemarkValue(node.name); } }}
-                      title={editMode ? '双击编辑备注' : node.name}
-                    >{node.name}</span>
-                    {/* Label (IP) */}
-                    {node.label && <span className="text-[10px] text-muted-foreground font-mono">{node.label}</span>}
-                  </div>
-                );
-              })}
-
-              {/* Node context menu */}
-              {nodeMenu && editMode && (
-                <div className="absolute z-50 bg-popover border border-border rounded-xl shadow-lg py-1 min-w-[160px]"
-                  style={{ left: nodeMenu.x + 10, top: nodeMenu.y + 10 }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
-                    onClick={() => { const n = topoNodes.find(nn => nn.id === nodeMenu.nodeId); setEditRemarkId(nodeMenu.nodeId); setEditRemarkValue(n?.name || ''); setNodeMenu(null); }}>
-                    <Pencil className="h-3.5 w-3.5" />编辑备注
-                  </button>
-                  <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
-                    onClick={() => { startLinking(nodeMenu.nodeId); setNodeMenu(null); }}>
-                    <Link2 className="h-3.5 w-3.5" />连线到...
-                  </button>
-                  <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
-                    onClick={() => { setLinkDeviceOpen(nodeMenu.nodeId); setNodeMenu(null); }}>
-                    <Plug className="h-3.5 w-3.5" />关联设备管理
-                  </button>
-                  {topoNodes.find(n => n.id === nodeMenu.nodeId)?.linkedDeviceId && (
-                    <button className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
-                      onClick={() => { unlinkDevice(nodeMenu.nodeId); setNodeMenu(null); }}>
-                      <Unplug className="h-3.5 w-3.5" />取消关联
-                    </button>
-                  )}
-                  <Separator />
-                  <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
-                    onClick={() => deleteNode(nodeMenu.nodeId)}>
-                    <Trash2 className="h-3.5 w-3.5" />删除节点
-                  </button>
-                </div>
-              )}
-
-              {/* Link device dialog */}
-              {linkDeviceOpen && (
-                <Dialog open onOpenChange={() => setLinkDeviceOpen(null)}>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader><DialogTitle>关联设备管理</DialogTitle></DialogHeader>
-                    <div className="max-h-60 overflow-y-auto space-y-1">
-                      {devices.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">设备管理中暂无设备</p>}
-                      {devices.map(dev => (
-                        <button key={dev.id}
-                          className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted/60 transition-colors text-sm"
-                          onClick={() => linkDevice(linkDeviceOpen, dev.id)}>
-                          <div className="flex items-center gap-2">
-                            <StatusDot status={dev.pingStatus} />
-                            <span className="font-medium">{dev.name}</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground font-mono">{dev.ip}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              )}
-
-              {/* Edit remark dialog */}
-              {editRemarkId && (
-                <Dialog open onOpenChange={() => setEditRemarkId(null)}>
-                  <DialogContent className="max-w-sm">
-                    <DialogHeader><DialogTitle>编辑备注</DialogTitle></DialogHeader>
-                    <input
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-input text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      value={editRemarkValue}
-                      onChange={e => setEditRemarkValue(e.target.value)}
-                      placeholder="输入备注名称"
-                      autoFocus
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          setTopoNodes(prev => prev.map(n => n.id === editRemarkId ? { ...n, name: editRemarkValue } : n));
-                          const node = topoNodes.find(n => n.id === editRemarkId);
-                          if (node) saveNode({ ...node, name: editRemarkValue });
-                          setEditRemarkId(null);
-                        }
-                        if (e.key === 'Escape') setEditRemarkId(null);
-                      }}
-                    />
-                    <div className="flex justify-end gap-2 mt-2">
-                      <button className="px-4 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors"
-                        onClick={() => setEditRemarkId(null)}>取消</button>
-                      <button className="px-4 py-1.5 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                        onClick={() => {
-                          setTopoNodes(prev => prev.map(n => n.id === editRemarkId ? { ...n, name: editRemarkValue } : n));
-                          const node = topoNodes.find(n => n.id === editRemarkId);
-                          if (node) saveNode({ ...node, name: editRemarkValue });
-                          setEditRemarkId(null);
-                        }}>保存</button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              )}
-
-              {/* Empty state */}
-              {topoNodes.length === 0 && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                  <EthernetPort className="h-12 w-12 text-muted-foreground/20" />
-                  <p className="text-sm text-muted-foreground">点击「编辑拓扑」添加设备节点</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Link list in edit mode */}
-        {editMode && topoLinks.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground font-medium">连线列表（点击删除）</p>
-            <div className="flex flex-wrap gap-2">
-              {topoLinks.map(link => {
-                const from = topoNodes.find(n => n.id === link.from);
-                const to = topoNodes.find(n => n.id === link.to);
-                return (
-                  <button key={link.id} onClick={() => deleteLink(link.id)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/50 hover:bg-red-500/10 text-xs text-muted-foreground hover:text-red-400 transition-colors">
-                    <Link2 className="h-3 w-3" />
-                    {from?.name || '?'} → {to?.name || '?'}
-                    <X className="h-3 w-3" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Floor Network Topology */}
+      <TopologyEditor topoType="floor" title="楼层网络拓扑" devices={devices} onNavigateDevice={onNavigateDevice} />
 
       {/* C: 最近告警时间线 */}
       <Card className="border-0 shadow-sm apple-card">

@@ -158,6 +158,8 @@ export interface AlertRecord {
 }
 
 // ==================== TOPOLOGY ====================
+export type TopoType = 'backbone' | 'floor';
+
 export interface TopoNode {
   id: string;
   type: string;       // core-switch / firewall / router / fortress / vpn / waf / behavior-manager / internet / access-switch / aggregation-switch / ap
@@ -166,6 +168,7 @@ export interface TopoNode {
   y: number;
   linkedDeviceId?: string;  // 可选关联设备管理中的设备ID
   label?: string;          // 自定义标签（如IP地址）
+  topoType?: TopoType;     // 拓扑类型：骨干(backbone) / 楼层(floor)，默认 backbone
 }
 
 export interface TopoLink {
@@ -173,6 +176,7 @@ export interface TopoLink {
   from: string;  // node id
   to: string;    // node id
   label?: string;
+  topoType?: TopoType;     // 拓扑类型：骨干(backbone) / 楼层(floor)，默认 backbone
 }
 
 export interface MonitorItem {
