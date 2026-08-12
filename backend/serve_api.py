@@ -57,6 +57,25 @@ os.chdir(os.environ.get('NETVIEWONE_HOME', '/data/net_view'))
 SAFE_HOST_RE = re.compile(r'^[a-zA-Z0-9._-]+$')
 SAFE_USER_RE = re.compile(r'^[a-zA-Z0-9._-]+$')
 
+
+def _safe_str(val):
+    """Safely convert a value to string, handling Unicode in Python 2.7.
+    In Python 2, json.loads() returns unicode strings; str() on non-ASCII
+    unicode raises UnicodeEncodeError. This function avoids that."""
+    if val is None:
+        return ''
+    if isinstance(val, bytes):
+        return val.decode('utf-8', errors='replace')
+    if PY3:
+        return str(val)
+    # Python 2: preserve unicode, safely convert everything else
+    if isinstance(val, unicode):
+        return val
+    try:
+        return unicode(val)
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return repr(val)
+
 # ==================== MySQL Setup ====================
 MYSQL_CONFIG = {
     'host': os.environ.get('NETVIEWONE_MYSQL_HOST', 'localhost'),
@@ -96,7 +115,7 @@ def get_mysql():
                 _mysql_tables_created = True
         return new_conn
     except Exception as e:
-        sys.stderr.write('MySQL connect failed: {}\n'.format(str(e)))
+        sys.stderr.write('MySQL connect failed: {}\n'.format(_safe_str(e)))
         _mysql_local.conn = None
         return None
 
@@ -118,7 +137,7 @@ def _create_tables(conn):
         try:
             cursor.execute(t)
         except Exception as e:
-            sys.stderr.write('Create table error: {}\n'.format(str(e)))
+            sys.stderr.write('Create table error: {}\n'.format(_safe_str(e)))
     conn.commit()
     cursor.close()
 
@@ -158,11 +177,11 @@ def mysql_get_all(table):
                 except (ValueError, TypeError):
                     result.append({'id': row_id, 'data': raw})
             except Exception as e:
-                sys.stderr.write('mysql_get_all parse error: {}\n'.format(str(e)))
+                sys.stderr.write('mysql_get_all parse error: {}\n'.format(_safe_str(e)))
         cursor.close()
         return result
     except Exception as e:
-        sys.stderr.write('mysql_get_all error: {}\n'.format(str(e)))
+        sys.stderr.write('mysql_get_all error: {}\n'.format(_safe_str(e)))
         return None
 
 
@@ -201,7 +220,7 @@ def mysql_upsert(table, id_val, data):
         cursor.close()
         return True
     except Exception as e:
-        sys.stderr.write('mysql_upsert error: {}\n'.format(str(e)))
+        sys.stderr.write('mysql_upsert error: {}\n'.format(_safe_str(e)))
         try:
             conn.rollback()
         except Exception:
@@ -221,7 +240,7 @@ def mysql_delete(table, id_val):
         cursor.close()
         return True
     except Exception as e:
-        sys.stderr.write('mysql_delete error: {}\n'.format(str(e)))
+        sys.stderr.write('mysql_delete error: {}\n'.format(_safe_str(e)))
         return False
 
 
@@ -257,7 +276,7 @@ def mysql_set_setting(key, value):
         cursor.close()
         return True
     except Exception as e:
-        sys.stderr.write('mysql_set_setting error: {}\n'.format(str(e)))
+        sys.stderr.write('mysql_set_setting error: {}\n'.format(_safe_str(e)))
         return False
 
 
@@ -321,7 +340,7 @@ class SSHSession:
         except Exception as e:
             os.close(master_fd)
             os.close(slave_fd)
-            raise Exception('Failed to start ssh: {}'.format(str(e)))
+            raise Exception('Failed to start ssh: {}'.format(_safe_str(e)))
 
         os.close(slave_fd)
         self.master_fd = master_fd
@@ -716,7 +735,7 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
         body = self._read_body()
         if body is None:
             return
-        host = str(body.get('host', '')).strip()
+        host = _safe_str(body.get('host', '')).strip()
         count = int(body.get('count', 4))
         count = max(1, min(count, 20))
 
@@ -744,14 +763,14 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
             success = proc.returncode == 0
             self._send_json({'success': success, 'output': result})
         except Exception as e:
-            self._send_json({'success': False, 'output': str(e)})
+            self._send_json({'success': False, 'output': _safe_str(e)})
 
     # ==================== TELNET ====================
     def _handle_telnet(self):
         body = self._read_body()
         if body is None:
             return
-        host = str(body.get('host', '')).strip()
+        host = _safe_str(body.get('host', '')).strip()
         port = int(body.get('port', 80))
         timeout = int(body.get('timeout', 5))
         timeout = max(1, min(timeout, 30))
@@ -782,7 +801,7 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
         except socket.timeout:
             self._send_json({'success': False, 'output': 'Connection to {}:{} timed out ({}s)'.format(host, port, timeout)})
         except Exception as e:
-            self._send_json({'success': False, 'output': str(e)})
+            self._send_json({'success': False, 'output': _safe_str(e)})
 
     # ==================== SSH CONNECT ====================
     def _handle_ssh_connect(self):
@@ -827,7 +846,7 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
                 'output': welcome,
             })
         except Exception as e:
-            self._send_json({'success': False, 'output': str(e)})
+            self._send_json({'success': False, 'output': _safe_str(e)})
 
     # ==================== SSH EXEC ====================
     def _handle_ssh_exec(self):
@@ -873,7 +892,7 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
                 session.close()
             except Exception:
                 pass
-            self._send_json({'success': False, 'output': str(e), 'closed': True})
+            self._send_json({'success': False, 'output': _safe_str(e), 'closed': True})
 
     # ==================== SSH DISCONNECT ====================
     def _handle_ssh_disconnect(self):
@@ -881,7 +900,7 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
         if body is None:
             return
 
-        session_id = str(body.get('sessionId', ''))
+        session_id = _safe_str(body.get('sessionId', ''))
         with SSH_LOCK:
             session = SSH_SESSIONS.pop(session_id, None)
 
@@ -898,7 +917,7 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
         body = self._read_body()
         if body is None:
             return
-        host = str(body.get('host', '')).strip()
+        host = _safe_str(body.get('host', '')).strip()
         if not host or not SAFE_HOST_RE.match(host):
             self._send_json({'success': False, 'up': False})
             return
@@ -912,16 +931,16 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
             up = proc.returncode == 0
             self._send_json({'success': True, 'up': up, 'host': host})
         except Exception as e:
-            self._send_json({'success': False, 'up': False, 'error': str(e)})
+            self._send_json({'success': False, 'up': False, 'error': _safe_str(e)})
 
     # ==================== SNMP PROBE ====================
     def _handle_snmp_probe(self):
         body = self._read_body()
         if body is None:
             return
-        host = str(body.get('host', '')).strip()
-        community = str(body.get('community', 'public')).strip()
-        version = str(body.get('version', '2c')).strip()
+        host = _safe_str(body.get('host', '')).strip()
+        community = _safe_str(body.get('community', 'public')).strip()
+        version = _safe_str(body.get('version', '2c')).strip()
         snmp_port = int(body.get('port', 161))
         if not host or not SAFE_HOST_RE.match(host):
             self._send_json({'success': False, 'up': False})
@@ -945,7 +964,7 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
                 up = proc.returncode == 0
                 self._send_json({'success': True, 'up': up, 'host': host, 'method': 'ping-fallback', 'note': 'snmpget not installed, using ping fallback'})
             except Exception as e:
-                self._send_json({'success': False, 'up': False, 'error': str(e)})
+                self._send_json({'success': False, 'up': False, 'error': _safe_str(e)})
             return
         try:
             snmp_ver = '2c' if version in ('v2c', '2c') else ('3' if version == 'v3' else '1')
@@ -962,7 +981,7 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
             up = proc.returncode == 0 and 'No Such' not in output and 'Timeout' not in output
             self._send_json({'success': True, 'up': up, 'host': host, 'community': community, 'method': 'snmpget'})
         except Exception as e:
-            self._send_json({'success': False, 'up': False, 'error': str(e)})
+            self._send_json({'success': False, 'up': False, 'error': _safe_str(e)})
 
     # ==================== SNMP COLLECT ====================
     def _handle_snmp_collect(self):
@@ -973,9 +992,9 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
         body = self._read_body()
         if body is None:
             return
-        host = str(body.get('host', '')).strip()
-        community = str(body.get('community', 'public')).strip()
-        version = str(body.get('version', '2c')).strip()
+        host = _safe_str(body.get('host', '')).strip()
+        community = _safe_str(body.get('community', 'public')).strip()
+        version = _safe_str(body.get('version', '2c')).strip()
         snmp_port = int(body.get('port', 161))
         oids = body.get('oids', [])
         if not host or not SAFE_HOST_RE.match(host):
@@ -1005,9 +1024,9 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
         target = '{}:{}'.format(host, snmp_port) if snmp_port != 161 else host
         results = []
         for item in oids:
-            name = str(item.get('name', ''))
-            oid = str(item.get('oid', '')).strip()
-            method = str(item.get('method', 'get'))
+            name = _safe_str(item.get('name', ''))
+            oid = _safe_str(item.get('oid', '')).strip()
+            method = _safe_str(item.get('method', 'get'))
             if not oid:
                 continue
             try:
@@ -1029,7 +1048,7 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
                     output = (stdout or b'').decode('utf-8', errors='replace') if isinstance(stdout, bytes) else (stdout or '')
                 results.append({'name': name, 'oid': oid, 'method': method, 'value': output.strip()})
             except Exception as e:
-                results.append({'name': name, 'oid': oid, 'method': method, 'value': '', 'error': str(e)})
+                results.append({'name': name, 'oid': oid, 'method': method, 'value': '', 'error': _safe_str(e)})
         self._send_json({'success': True, 'results': results})
 
     # ==================== UTILITIES ====================
@@ -1044,7 +1063,7 @@ class NetviewOneHandler(SimpleHTTPRequestHandler):
                 body = body.decode('utf-8')
             return json.loads(body)
         except Exception as e:
-            self._send_json({'error': 'Invalid JSON: ' + str(e)}, 400)
+            self._send_json({'error': 'Invalid JSON: ' + _safe_str(e)}, 400)
             return None
 
     def _send_json(self, data, code=200):

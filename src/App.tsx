@@ -1179,12 +1179,15 @@ function MonitorItemsPage({ devices, deviceId, onBack, templates }: { devices: D
     const port = Number(item.snmpPort) || Number(device?.snmpPort) || 161;
     setExecutingIds(prev => new Set(prev).add(item.id));
     console.log('[executeNow] host=', host, 'oid=', oid, 'community=', community, 'port=', port, 'version=', version);
+    const controller = new AbortController();
+    const timeoutTimer = setTimeout(() => controller.abort(), 30000);
     fetch(`${API_BASE}/api/snmp-collect`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         host, community, version, port,
         oids: [{ name: item.name, oid, method: 'get' }]
-      })
+      }),
+      signal: controller.signal
     }).then(r => { console.log('[executeNow] HTTP status=', r.status); return r.json(); }).then(res => {
       console.log('[executeNow] response=', JSON.stringify(res).slice(0, 500));
       const result = res.results?.[0];
@@ -1218,9 +1221,12 @@ function MonitorItemsPage({ devices, deviceId, onBack, templates }: { devices: D
       }
     }).catch(err => {
       console.error('[executeNow] fetch error=', err);
-      const updated = { ...item, lastValue: '请求失败: ' + (err.message || String(err)).slice(0, 40), lastCheck: new Date().toISOString().slice(0, 19).replace('T', ' '), status: 'error' as const };
+      const isAbort = err.name === 'AbortError';
+      const msg = isAbort ? '请求超时(30s)，设备可能不可达或网络拥堵' : '请求失败: ' + (err.message || String(err)).slice(0, 40);
+      const updated = { ...item, lastValue: msg, lastCheck: new Date().toISOString().slice(0, 19).replace('T', ' '), status: 'error' as const };
       setItems(prev => prev.map(i => i.id === item.id ? updated : i));
     }).finally(() => {
+      clearTimeout(timeoutTimer);
       setExecutingIds(prev => { const s = new Set(prev); s.delete(item.id); return s; });
     });
   };
@@ -2226,12 +2232,15 @@ function MonitorHostsPage({ devices, templates }: { devices: Device[]; templates
     const port = Number(item.snmpPort) || Number(selectedDevice?.snmpPort) || 161;
     setExecutingIds(prev => new Set(prev).add(item.id));
     console.log('[HostsPage executeNow] host=', host, 'oid=', oid, 'community=', community, 'port=', port, 'version=', version);
+    const controller = new AbortController();
+    const timeoutTimer = setTimeout(() => controller.abort(), 30000);
     fetch(`${API_BASE}/api/snmp-collect`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         host, community, version, port,
         oids: [{ name: item.name, oid, method: 'get' }]
-      })
+      }),
+      signal: controller.signal
     }).then(r => { console.log('[HostsPage] HTTP status=', r.status); return r.json(); }).then(res => {
       console.log('[HostsPage] response=', JSON.stringify(res).slice(0, 500));
       const result = res.results?.[0];
@@ -2264,9 +2273,12 @@ function MonitorHostsPage({ devices, templates }: { devices: Device[]; templates
       }
     }).catch(err => {
       console.error('[HostsPage] fetch error=', err);
-      const updated = { ...item, lastValue: '请求失败: ' + (err.message || String(err)).slice(0, 40), lastCheck: new Date().toISOString().slice(0, 19).replace('T', ' '), status: 'error' as const };
+      const isAbort = err.name === 'AbortError';
+      const msg = isAbort ? '请求超时(30s)，设备可能不可达或网络拥堵' : '请求失败: ' + (err.message || String(err)).slice(0, 40);
+      const updated = { ...item, lastValue: msg, lastCheck: new Date().toISOString().slice(0, 19).replace('T', ' '), status: 'error' as const };
       setMonitorItems(prev => prev.map(i => i.id === item.id ? updated : i));
     }).finally(() => {
+      clearTimeout(timeoutTimer);
       setExecutingIds(prev => { const s = new Set(prev); s.delete(item.id); return s; });
     });
   };
@@ -3215,6 +3227,43 @@ export default function App() {
   devicesRef.current = devices;
   const API_BASE = typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? (window.__NETVIEWONE_API_BASE__ || 'http://localhost:8090') : '';
 
+  // Concurrency-limited probe: process devices with max N parallel requests to avoid
+  // exhausting the browser's HTTP/1.1 connection pool (6 per origin), which would
+  // cause other API calls (e.g. snmp-collect "execute now") to fail with "Failed to fetch".
+  const probeWithLimit = (devices: Device[], type: 'ping' | 'snmp') => {
+    const MAX_CONCURRENT = 3;
+    const TIMEOUT_MS = 10000;
+    let idx = 0;
+    const worker = async () => {
+      while (idx < devices.length) {
+        const device = devices[idx++];
+        if (type === 'snmp' && !device.snmpEnabled) {
+          setDevices(prev => prev.map(d => d.id === device.id ? { ...d, snmpStatus: 'disabled' } : d));
+          continue;
+        }
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+          const url = type === 'ping' ? `${API_BASE}/api/ping-probe` : `${API_BASE}/api/snmp-probe`;
+          const body = type === 'ping'
+            ? JSON.stringify({ host: device.ip })
+            : JSON.stringify({ host: device.ip, community: device.snmpCommunity || 'public', version: device.snmpVersion || 'v2c', port: device.snmpPort || 161 });
+          const res = await fetch(url, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body, signal: controller.signal
+          });
+          clearTimeout(timer);
+          const data = await res.json();
+          const newStatus = data.up ? 'up' : 'down';
+          setDevices(prev => prev.map(d => d.id === device.id ? { ...d, [type === 'ping' ? 'pingStatus' : 'snmpStatus']: newStatus } : d));
+        } catch {
+          setDevices(prev => prev.map(d => d.id === device.id ? { ...d, [type === 'ping' ? 'pingStatus' : 'snmpStatus']: 'down' } : d));
+        }
+      }
+    };
+    Promise.all(Array.from({ length: MAX_CONCURRENT }, worker)).catch(() => {});
+  };
+
   useEffect(() => {
     if (page === 'login' || page === 'register' || page === 'forgot') return;
     const interval = setInterval(() => {
@@ -3222,43 +3271,19 @@ export default function App() {
       const tick = monitorTickRef.current;
       const currentDevices = devicesRef.current;
 
-      // PING probe
+      // PING probe (concurrency-limited)
       if (monitorSettings.pingEnabled && currentDevices.length > 0) {
         const pingSec = Math.max(monitorSettings.pingInterval || 60, 10);
         if (tick % Math.round(pingSec / 10) === 0 || tick === 1) {
-          currentDevices.forEach(device => {
-            fetch(`${API_BASE}/api/ping-probe`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ host: device.ip })
-            }).then(r => r.json()).then(res => {
-              const newStatus = res.up ? 'up' : 'down';
-              setDevices(prev => prev.map(d => d.id === device.id ? { ...d, pingStatus: newStatus } : d));
-            }).catch(() => {
-              setDevices(prev => prev.map(d => d.id === device.id ? { ...d, pingStatus: 'down' } : d));
-            });
-          });
+          probeWithLimit(currentDevices, 'ping');
         }
       }
 
-      // SNMP probe
+      // SNMP probe (concurrency-limited)
       if (monitorSettings.snmpEnabled && currentDevices.length > 0) {
         const snmpSec = Math.max(monitorSettings.snmpInterval || 120, 30);
         if (tick % Math.round(snmpSec / 10) === 0 || tick === 1) {
-          currentDevices.forEach(device => {
-            if (!device.snmpEnabled) {
-              setDevices(prev => prev.map(d => d.id === device.id ? { ...d, snmpStatus: 'disabled' } : d));
-              return;
-            }
-            fetch(`${API_BASE}/api/snmp-probe`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ host: device.ip, community: device.snmpCommunity || 'public', version: device.snmpVersion || 'v2c', port: device.snmpPort || 161 })
-            }).then(r => r.json()).then(res => {
-              const newStatus = res.up ? 'up' : 'down';
-              setDevices(prev => prev.map(d => d.id === device.id ? { ...d, snmpStatus: newStatus } : d));
-            }).catch(() => {
-              setDevices(prev => prev.map(d => d.id === device.id ? { ...d, snmpStatus: 'down' } : d));
-            });
-          });
+          probeWithLimit(currentDevices, 'snmp');
         }
       }
     }, 10000); // check every 10s, actual probe controlled by interval settings
