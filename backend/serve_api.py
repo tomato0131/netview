@@ -66,38 +66,39 @@ MYSQL_CONFIG = {
     'charset': 'utf8mb4',
 }
 
-_mysql_conn = None
+_mysql_local = threading.local()
 _mysql_lock = threading.Lock()
 _mysql_tables_created = False
 
 
 def get_mysql():
-    """Get or create a MySQL connection (thread-local per call, with reconnect)."""
-    global _mysql_conn, _mysql_tables_created
+    """Get or create a thread-local MySQL connection with auto-reconnect."""
+    global _mysql_tables_created
     try:
         import MySQLdb
     except ImportError:
         return None
 
-    with _mysql_lock:
-        if _mysql_conn is not None:
-            try:
-                _mysql_conn.ping(True)
-                return _mysql_conn
-            except Exception:
-                _mysql_conn = None
-
+    conn = getattr(_mysql_local, 'conn', None)
+    if conn is not None:
         try:
-            conn = MySQLdb.connect(**MYSQL_CONFIG)
-            _mysql_conn = conn
-            if not _mysql_tables_created:
-                _create_tables(conn)
-                _mysql_tables_created = True
+            conn.ping(True)
             return conn
-        except Exception as e:
-            sys.stderr.write('MySQL connect failed: {}\n'.format(str(e)))
-            _mysql_conn = None
-            return None
+        except Exception:
+            conn = None
+
+    try:
+        new_conn = MySQLdb.connect(**MYSQL_CONFIG)
+        _mysql_local.conn = new_conn
+        with _mysql_lock:
+            if not _mysql_tables_created:
+                _create_tables(new_conn)
+                _mysql_tables_created = True
+        return new_conn
+    except Exception as e:
+        sys.stderr.write('MySQL connect failed: {}\n'.format(str(e)))
+        _mysql_local.conn = None
+        return None
 
 
 def _create_tables(conn):
